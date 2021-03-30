@@ -22,13 +22,16 @@ type Row struct {
 
 func main() {
 	tsv, _ := os.Open("test.tsv")
-	rows := GetTSVRows(tsv)
+	rows, err := GetTSVRows(tsv)
+	if err != nil {
+		panic(err)
+	}
 	for _, row := range rows {
 		fmt.Println(row)
 	}
 }
 
-func GetTSVRows(tsv *os.File) []Row {
+func GetTSVRows(tsv *os.File) ([]Row, error) {
 	rows := []Row{}
 	scanner := bufio.NewScanner(tsv)
 	scanner.Scan() // skip the header line
@@ -37,8 +40,8 @@ func GetTSVRows(tsv *os.File) []Row {
 		rows = append(rows, Row{cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9]})
 	}
 	if scanner.Err() != nil {
-		panic(scanner.Err())
+		return rows, scanner.Err()
 	}
 
-	return rows
+	return rows, nil
 }
