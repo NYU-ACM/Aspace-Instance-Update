@@ -91,35 +91,63 @@ func main() {
 	//iterate each row in the Array
 	for _, row := range rows {
 		if (row.ContainerIndicator1 != row.NewContainerIndicator1 || row.ContainerIndicator2 != row.NewContainerIndicator2) {
-			err = UpdateAO(row)
+			msg, err := UpdateAO(row)
+			if err != nil {
+				panic(err)
+			}
+
+			fmt.Println(msg)
 		}
 	}
 }
-func UpdateAO(row Row) error {
+
+func UpdateAO(row Row) (string, error) {
 	fmt.Println(row.URI)
 
 	repoId, aoID, err := aspace.URISplit(row.URI)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	ao, err := client.GetArchivalObject(repoId, aoID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	//update top Container Reference
 	if row.ContainerIndicator1 != row.NewContainerIndicator1 {
-		newTopContainer := topContainers[row.NewContainerIndicator1]
+		var newTopContainer aspace.TopContainer
+		if undo != true {
+			newTopContainer = topContainers[row.NewContainerIndicator1]
+			ao.Instances[0].SubContainer.TopContainer["ref"] = newTopContainer.URI
+		} else {
+			newTopContainer = topContainers[row.NewContainerIndicator2]
+		}
 		ao.Instances[0].SubContainer.TopContainer["ref"] = newTopContainer.URI
 	}
 
 	//update indicator 2
 	if row.ContainerIndicator2 != row.NewContainerIndicator2 {
-		ao.Instances[0].SubContainer.Indicator_2 = row.NewContainerIndicator2
+		if undo != true {
+			ao.Instances[0].SubContainer.Indicator_2 = row.NewContainerIndicator2
+		} else {
+			ao.Instances[0].SubContainer.Indicator_2 = row.ContainerIndicator2
+		}
 	}
 
-	return nil
+	if test == true {
+		return "Test Mode not Updating AO", nil
+	} else {
+		//update the ao
+		msg, err := client.UpdateArchivalObject(repoId, aoID, ao)
+		if err != nil {
+			 return "", nil
+		}
+
+		return msg, nil
+	}
+
+
 }
 
 func GetTSVRows(tsv *os.File) ([]Row, error) {
