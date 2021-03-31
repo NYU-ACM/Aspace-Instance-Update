@@ -119,7 +119,6 @@ func UpdateAO(row Row) (string, error) {
 		var newTopContainer aspace.TopContainer
 		if undo != true {
 			newTopContainer = topContainers[row.NewContainerIndicator1]
-			ao.Instances[0].SubContainer.TopContainer["ref"] = newTopContainer.URI
 		} else {
 			newTopContainer = topContainers[row.NewContainerIndicator2]
 		}
