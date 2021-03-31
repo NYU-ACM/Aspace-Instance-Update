@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"github.com/nyudlts/go-aspace"
 	"os"
@@ -21,11 +22,34 @@ type Row struct {
 	NewContainerIndicator2 string
 }
 
+var client *aspace.ASClient
+var topContainers map[string]aspace.TopContainer
+var wo string
+var test bool
+var undo bool
+
+func init() {
+	flag.StringVar(&wo, "workorder", "", "work order location")
+	flag.BoolVar(&test, "test", false, "run in test mode")
+	flag.BoolVar(&undo, "undo", false, "run in undo mode")
+	flag.Parse()
+}
+
 func main() {
 	fmt.Println("aspace-instance-update")
+
+	//check if the work order exists or is null
+	if wo == "" {
+		panic(fmt.Errorf("No work order specified, exiting"))
+	}
+
+	if _, err := os.Stat(wo); os.IsNotExist(err) {
+		panic(fmt.Errorf("Work order location is not valid, exiting"))
+	}
+
 	//open a work order and check for errors
 	fmt.Println("1. Parsing work order")
-	tsv, err := os.Open(os.Args[1])
+	tsv, err := os.Open(wo)
 	if err != nil {
 		panic(err)
 	}
@@ -37,7 +61,7 @@ func main() {
 
 	fmt.Println("2. Getting Aspace client")
 	//get a go-aspace client
-	client, err := aspace.NewClient("dev", 20)
+	client, err = aspace.NewClient("dev", 20)
 	if err != nil {
 		panic(err)
 	}
@@ -58,7 +82,7 @@ func main() {
 
 	//Get a map of Top Containers from aspace  for the resource
 	fmt.Println("4. Getting Top Containers for resource")
-	topContainers, err := client.GetTopContainersForResource(repositoryId, resourceId)
+	topContainers, err = client.GetTopContainersForResource(repositoryId, resourceId)
 	if err != nil {
 		panic(err)
 	}
@@ -66,9 +90,36 @@ func main() {
 	fmt.Println("5. Updating AO indicators and Top Container URI")
 	//iterate each row in the Array
 	for _, row := range rows {
-		tc := topContainers[row.ContainerIndicator1]
-		fmt.Println(tc.Indicator, "->", tc.Barcode)  //the function to test,update,and undo topcontainer info goes here.
+		if (row.ContainerIndicator1 != row.NewContainerIndicator1 || row.ContainerIndicator2 != row.NewContainerIndicator2) {
+			err = UpdateAO(row)
+		}
 	}
+}
+func UpdateAO(row Row) error {
+	fmt.Println(row.URI)
+
+	repoId, aoID, err := aspace.URISplit(row.URI)
+	if err != nil {
+		return err
+	}
+
+	ao, err := client.GetArchivalObject(repoId, aoID)
+	if err != nil {
+		return err
+	}
+
+	//update top Container Reference
+	if row.ContainerIndicator1 != row.NewContainerIndicator1 {
+		newTopContainer := topContainers[row.NewContainerIndicator1]
+		ao.Instances[0].SubContainer.TopContainer["ref"] = newTopContainer.URI
+	}
+
+	//update indicator 2
+	if row.ContainerIndicator2 != row.NewContainerIndicator2 {
+		ao.Instances[0].SubContainer.Indicator_2 = row.NewContainerIndicator2
+	}
+
+	return nil
 }
 
 func GetTSVRows(tsv *os.File) ([]Row, error) {
