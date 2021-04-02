@@ -22,13 +22,17 @@ type Row struct {
 	NewContainerIndicator2 string
 }
 
-var client *aspace.ASClient
-var topContainers map[string]aspace.TopContainer
-var wo string
-var test bool
-var undo bool
+var (
+	client *aspace.ASClient
+	topContainers map[string]aspace.TopContainer
+	wo string
+	test bool
+	undo bool
+	env string
+)
 
 func init() {
+	flag.StringVar(&env, "environment", "", "environment to run script")
 	flag.StringVar(&wo, "workorder", "", "work order location")
 	flag.BoolVar(&test, "test", false, "run in test mode")
 	flag.BoolVar(&undo, "undo", false, "run in undo mode")
@@ -61,6 +65,9 @@ func main() {
 
 	fmt.Println("2. Getting Aspace client")
 	//get a go-aspace client
+	if env == "" {
+		panic(fmt.Errorf("Environment must be defined"))
+	}
 	client, err = aspace.NewClient("dev", 20)
 	if err != nil {
 		panic(err)
