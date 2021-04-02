@@ -29,7 +29,7 @@ var (
 	test bool
 	undo bool
 	env string
-	helpmsg string
+	helpmsg bool
 )
 
 func init() {
@@ -37,7 +37,7 @@ func init() {
 	flag.StringVar(&wo, "workorder", "", "work order location")
 	flag.BoolVar(&test, "test", false, "run in test mode")
 	flag.BoolVar(&undo, "undo", false, "run in undo mode")
-	flag.StringVar(&helpmsg, "help", "", "environment to run script")
+	flag.BoolVar(&helpmsg, "help", false, "display the help message")
 	flag.Parse()
 }
 
@@ -54,11 +54,9 @@ options:
 
 func main() {
 	//check if the help flag is set
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "help" {
-			help()
-		}
-	})
+	if helpmsg == true {
+		help()
+	}
 
 	fmt.Println("aspace-instance-update")
 
