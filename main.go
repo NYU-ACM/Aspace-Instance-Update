@@ -96,13 +96,13 @@ func main() {
 				panic(err)
 			}
 
-			fmt.Println(msg)
+			fmt.Println("    Result:", msg)
 		}
 	}
 }
 
 func UpdateAO(row Row) (string, error) {
-	fmt.Println(row.URI)
+	fmt.Println("  Updating:", row.URI)
 
 	repoId, aoID, err := aspace.URISplit(row.URI)
 	if err != nil {
@@ -114,13 +114,14 @@ func UpdateAO(row Row) (string, error) {
 		return "", err
 	}
 
+	fmt.Println("    Before: ", ao.Instances)
 	//update top Container Reference
 	if row.ContainerIndicator1 != row.NewContainerIndicator1 {
 		var newTopContainer aspace.TopContainer
 		if undo != true {
 			newTopContainer = topContainers[row.NewContainerIndicator1]
 		} else {
-			newTopContainer = topContainers[row.NewContainerIndicator2]
+			newTopContainer = topContainers[row.ContainerIndicator1]
 		}
 		ao.Instances[0].SubContainer.TopContainer["ref"] = newTopContainer.URI
 	}
@@ -128,14 +129,25 @@ func UpdateAO(row Row) (string, error) {
 	//update indicator 2
 	if row.ContainerIndicator2 != row.NewContainerIndicator2 {
 		if undo != true {
-			ao.Instances[0].SubContainer.Indicator_2 = row.NewContainerIndicator2
+			for i, instance := range ao.Instances {
+				if instance.SubContainer.Indicator_2 == row.ContainerIndicator2 {
+					ao.Instances[i].SubContainer.Indicator_2 = row.NewContainerIndicator2
+				}
+			}
+
 		} else {
-			ao.Instances[0].SubContainer.Indicator_2 = row.ContainerIndicator2
+			for i, instance := range ao.Instances {
+				if instance.SubContainer.Indicator_2 == row.NewContainerIndicator2 {
+					ao.Instances[i].SubContainer.Indicator_2 = row.ContainerIndicator2
+				}
+			}
 		}
 	}
 
+	fmt.Println("    After: ", ao.Instances)
+
 	if test == true {
-		return "Test Mode not Updating AO", nil
+		return "Test Mode - not Updating AO", nil
 	} else {
 		//update the ao
 		msg, err := client.UpdateArchivalObject(repoId, aoID, ao)
