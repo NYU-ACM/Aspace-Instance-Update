@@ -29,6 +29,7 @@ var (
 	test bool
 	undo bool
 	env string
+	helpmsg string
 )
 
 func init() {
@@ -36,15 +37,36 @@ func init() {
 	flag.StringVar(&wo, "workorder", "", "work order location")
 	flag.BoolVar(&test, "test", false, "run in test mode")
 	flag.BoolVar(&undo, "undo", false, "run in undo mode")
+	flag.StringVar(&helpmsg, "help", "", "environment to run script")
 	flag.Parse()
 }
 
+func help() {
+	fmt.Println(`$ aspace-instance-update options
+options:
+  --workorder, required, /path/to/workorder.tsv
+  --environment, required, aspace environment to be used: dev/stage/prod
+  --undo, optional, runs a work order in revrse, undo a previous run
+  --test, optional, test mode does not execute any POSTs, this is recommended before running on any data
+  --help print this help message`)
+	os.Exit(0)
+}
+
 func main() {
+	//check if the help flag is set
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "help" {
+			help()
+		}
+	})
+
 	fmt.Println("aspace-instance-update")
 
 	//check if the work order exists or is null
 	if wo == "" {
-		panic(fmt.Errorf("No work order specified, exiting"))
+		fmt.Printf("No work order specified, exiting")
+		help()
+
 	}
 
 	if _, err := os.Stat(wo); os.IsNotExist(err) {
@@ -164,7 +186,6 @@ func UpdateAO(row Row) (string, error) {
 
 		return msg, nil
 	}
-
 
 }
 
