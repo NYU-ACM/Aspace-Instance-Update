@@ -10,21 +10,23 @@ import (
 )
 
 type Row struct {
-	Resource               string
-	RefID                  string
-	URI                    string
-	ContainerIndicator1    string
-	ContainerIndicator2    string
-	ContainerIndicator3    string
-	Title                  string
-	ComponentId            string
-	NewContainerIndicator1 string
-	NewContainerIndicator2 string
+	Resource               	string
+	RefID                  	string
+	URI                    	string
+	ContainerIndicator1    	string
+	ContainerIndicator2    	string
+	ContainerIndicator3    	string
+	Title                  	string
+	ComponentId            	string
+	Barcode				   	string
+	NewContainerIndicator2	string
+	NewBarcode 				string
 }
 
 var (
 	client *aspace.ASClient
-	topContainers map[string]aspace.TopContainer
+	topContainers []aspace.TopContainer
+	topContainerMap map[string]aspace.TopContainer
 	wo string
 	test bool
 	undo bool
@@ -39,17 +41,6 @@ func init() {
 	flag.BoolVar(&undo, "undo", false, "run in undo mode")
 	flag.BoolVar(&helpmsg, "help", false, "display the help message")
 	flag.Parse()
-}
-
-func help() {
-	fmt.Println(`$ aspace-instance-update options
-options:
-  --workorder, required, /path/to/workorder.tsv
-  --environment, required, aspace environment to be used: dev/stage/prod
-  --undo, optional, runs a work order in revrse, undo a previous run
-  --test, optional, test mode does not execute any POSTs, this is recommended before running on any data
-  --help print this help message`)
-	os.Exit(0)
 }
 
 func main() {
@@ -107,25 +98,37 @@ func main() {
 	}
 	_, resourceId, err := aspace.URISplit(ao.Resource["ref"])
 
-	//Get a map of Top Containers from aspace  for the resource
+	//Get a list of Top Containers from aspace  for the resource
 	fmt.Println("4. Getting Top Containers for resource")
+
 	topContainers, err = client.GetTopContainersForResource(repositoryId, resourceId)
 	if err != nil {
 		panic(err)
 	}
+	//create a map of top containers indexed by barcode
+	topContainerMap = MapTopContainers(topContainers)
 
 	fmt.Println("5. Updating AO indicators and Top Container URI")
 	//iterate each row in the Array
 	for _, row := range rows {
-		if (row.ContainerIndicator1 != row.NewContainerIndicator1 || row.ContainerIndicator2 != row.NewContainerIndicator2) {
+		if (row.Barcode != row.NewBarcode || row.ContainerIndicator2 != row.NewContainerIndicator2) {
 			msg, err := UpdateAO(row)
 			if err != nil {
 				panic(err)
 			}
-
 			fmt.Println("    Result:", msg)
 		}
 	}
+}
+
+func MapTopContainers(tcs []aspace.TopContainer) map[string]aspace.TopContainer {
+	tcMap := map[string]aspace.TopContainer{}
+	for _, tc := range tcs {
+		if(tc.Barcode != "") {
+			tcMap[tc.Barcode] = tc
+		}
+	}
+	return tcMap
 }
 
 func UpdateAO(row Row) (string, error) {
@@ -143,12 +146,12 @@ func UpdateAO(row Row) (string, error) {
 
 	fmt.Println("    Before: ", ao.Instances)
 	//update top Container Reference
-	if row.ContainerIndicator1 != row.NewContainerIndicator1 {
+	if row.Barcode != row.NewBarcode {
 		var newTopContainer aspace.TopContainer
 		if undo != true {
-			newTopContainer = topContainers[row.NewContainerIndicator1]
+			newTopContainer = topContainerMap[row.NewBarcode]
 		} else {
-			newTopContainer = topContainers[row.ContainerIndicator1]
+			newTopContainer = topContainerMap[row.Barcode]
 		}
 		ao.Instances[0].SubContainer.TopContainer["ref"] = newTopContainer.URI
 	}
@@ -199,7 +202,7 @@ func GetTSVRows(tsv *os.File) ([]Row, error) {
 		//split the line by tab chars
 		cols := strings.Split(scanner.Text(), "\t")
 		//marshal the split line into a Row struct and add to the array of Rows
-		rows = append(rows, Row{cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9]})
+		rows = append(rows, Row{cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9], cols[10]})
 	}
 	//Check for any read errors
 	if scanner.Err() != nil {
@@ -208,4 +211,15 @@ func GetTSVRows(tsv *os.File) ([]Row, error) {
 
 	//return the array of Rows
 	return rows, nil
+}
+
+func help() {
+	fmt.Println(`$ aspace-instance-update options
+options:
+  --workorder, required, /path/to/workorder.tsv
+  --environment, required, aspace environment to be used: dev/stage/prod
+  --undo, optional, runs a work order in revrse, undo a previous run
+  --test, optional, test mode does not execute any POSTs, this is recommended before running on any data
+  --help print this help message`)
+	os.Exit(0)
 }
