@@ -145,34 +145,32 @@ func UpdateAO(row Row) (string, error) {
 	}
 
 	fmt.Println("    Before: ", ao.Instances)
-	//update top Container Reference
-	if row.Barcode != row.NewBarcode {
-		var newTopContainer aspace.TopContainer
-		if undo != true {
-			newTopContainer = topContainerMap[row.NewBarcode]
-		} else {
-			newTopContainer = topContainerMap[row.Barcode]
-		}
-		ao.Instances[0].SubContainer.TopContainer["ref"] = newTopContainer.URI
-	}
 
-	//update indicator 2
-	if row.ContainerIndicator2 != row.NewContainerIndicator2 {
+	for i, instance := range ao.Instances {
 		if undo != true {
-			for i, instance := range ao.Instances {
-				if instance.SubContainer.Indicator_2 == row.ContainerIndicator2 {
-					ao.Instances[i].SubContainer.Indicator_2 = row.NewContainerIndicator2
-				}
+			//update barcode
+			if instance.SubContainer.TopContainer["ref"] == topContainerMap[row.Barcode].URI {
+				ao.Instances[i].SubContainer.TopContainer["ref"] = topContainerMap[row.NewBarcode].URI
+			}
+
+			//update indicator 2
+			if instance.SubContainer.Indicator_2 == row.ContainerIndicator2 {
+				ao.Instances[i].SubContainer.Indicator_2 = row.NewContainerIndicator2
 			}
 
 		} else {
-			for i, instance := range ao.Instances {
-				if instance.SubContainer.Indicator_2 == row.NewContainerIndicator2 {
-					ao.Instances[i].SubContainer.Indicator_2 = row.ContainerIndicator2
-				}
+			//update barcode undo
+			if instance.SubContainer.TopContainer["ref"] == topContainerMap[row.NewBarcode].URI {
+				ao.Instances[i].SubContainer.TopContainer["ref"] = topContainerMap[row.Barcode].URI
+			}
+
+			//update indicator 2 undo
+			if instance.SubContainer.Indicator_2 == row.NewContainerIndicator2 {
+				ao.Instances[i].SubContainer.Indicator_2 = row.ContainerIndicator2
 			}
 		}
 	}
+
 
 	fmt.Println("    After: ", ao.Instances)
 
@@ -182,7 +180,7 @@ func UpdateAO(row Row) (string, error) {
 		//update the ao
 		msg, err := client.UpdateArchivalObject(repoId, aoID, ao)
 		if err != nil {
-			 return "", nil
+			 return msg, err
 		}
 
 		return msg, nil
