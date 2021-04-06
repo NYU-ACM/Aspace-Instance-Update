@@ -212,7 +212,7 @@ func GetTSVRows(tsv *os.File) ([]Row, error) {
 }
 
 func help() {
-	fmt.Println(`$ aspace-instance-update options
+	fmt.Println(`$ aspace-instance-update [options]
 options:
   --workorder, required, /path/to/workorder.tsv
   --environment, required, aspace environment to be used: dev/stage/prod
