@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/nyudlts/go-aspace"
@@ -32,6 +33,7 @@ var (
 	undo bool
 	env string
 	helpmsg bool
+	writer *bufio.Writer
 )
 
 func init() {
@@ -108,7 +110,18 @@ func main() {
 	//create a map of top containers indexed by barcode
 	topContainerMap = MapTopContainers(topContainers)
 
-	fmt.Println("5. Updating AO indicators and Top Container URI")
+	fmt.Println("5. Creating Logfile")
+	logFile, err := os.Create("aspace-instance-update-log.tsv")
+	if err != nil {
+		panic(err)
+	}
+	defer logFile.Close()
+	writer = bufio.NewWriter(logFile)
+	writer.WriteString("AO URI\tResult\tOriginal Barcode\tUpdated Barcode\tOriginal Child Ind 2\tUpdated Child Ind 2\n")
+	writer.Flush()
+
+
+	fmt.Println("6. Updating AO indicators and Top Container URI")
 	//iterate each row in the Array
 	for _, row := range rows {
 		if (row.Barcode != row.NewBarcode || row.ContainerIndicator2 != row.NewContainerIndicator2) {
@@ -144,7 +157,10 @@ func UpdateAO(row Row) (string, error) {
 		return "", err
 	}
 
-	fmt.Println("    Before: ", ao.Instances)
+	var beforeBarcode string
+	var afterBarcode string
+	var beforeCI2 string
+	var afterCI2 string
 
 	for i, instance := range ao.Instances {
 		if undo != true {
@@ -152,37 +168,50 @@ func UpdateAO(row Row) (string, error) {
 			if instance.SubContainer.TopContainer["ref"] == topContainerMap[row.Barcode].URI {
 				ao.Instances[i].SubContainer.TopContainer["ref"] = topContainerMap[row.NewBarcode].URI
 			}
+			beforeBarcode = row.Barcode
+			afterBarcode = row.NewBarcode
 
 			//update indicator 2
 			if instance.SubContainer.Indicator_2 == row.ContainerIndicator2 {
 				ao.Instances[i].SubContainer.Indicator_2 = row.NewContainerIndicator2
 			}
+			beforeCI2 = row.ContainerIndicator2
+			afterCI2 = row.NewContainerIndicator2
 
 		} else {
 			//update barcode undo
 			if instance.SubContainer.TopContainer["ref"] == topContainerMap[row.NewBarcode].URI {
 				ao.Instances[i].SubContainer.TopContainer["ref"] = topContainerMap[row.Barcode].URI
 			}
+			beforeBarcode = row.NewBarcode
+			afterBarcode = row.Barcode
 
 			//update indicator 2 undo
 			if instance.SubContainer.Indicator_2 == row.NewContainerIndicator2 {
 				ao.Instances[i].SubContainer.Indicator_2 = row.ContainerIndicator2
 			}
+			beforeCI2 = row.NewContainerIndicator2
+			afterCI2 = row.ContainerIndicator2
 		}
 	}
 
-
-	fmt.Println("    After: ", ao.Instances)
+	//after := GeInstanceAsJson(ao.Instances)
+	//fmt.Println("    After: ", ao.Instances)
 
 	if test == true {
 		return "Test Mode - not Updating AO", nil
 	} else {
 		//update the ao
 		msg, err := client.UpdateArchivalObject(repoId, aoID, ao)
-		if err != nil {
-			 return msg, err
-		}
+		msg = strings.ReplaceAll(msg, "\n", "")
 
+		if err != nil {
+			writer.WriteString(fmt.Sprintf("%s\tERROR\t%s\t%s\t%s\t%s\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2))
+			writer.Flush()
+			return msg, err
+		}
+		writer.WriteString(fmt.Sprintf("%s\tSUCCESS\t%s\t%s\t%s\t%s\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2))
+		writer.Flush()
 		return msg, nil
 	}
 
@@ -220,4 +249,9 @@ options:
   --test, optional, test mode does not execute any POSTs, this is recommended before running on any data
   --help print this help message`)
 	os.Exit(0)
+}
+
+func GetInstanceAsJson(instances []aspace.Instance) string {
+	instanceJson, _ := json.Marshal(instances)
+	return string(instanceJson)
 }
