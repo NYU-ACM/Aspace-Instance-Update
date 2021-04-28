@@ -81,7 +81,7 @@ func main() {
 	if env == "" {
 		panic(fmt.Errorf("Environment must be defined"))
 	}
-	client, err = aspace.NewClient("prod", 20)
+	client, err = aspace.NewClient(env, 20)
 	if err != nil {
 		panic(err)
 	}
