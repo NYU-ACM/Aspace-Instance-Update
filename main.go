@@ -81,7 +81,7 @@ func main() {
 	if env == "" {
 		panic(fmt.Errorf("Environment must be defined"))
 	}
-	client, err = aspace.NewClient("dev", 20)
+	client, err = aspace.NewClient("prod", 20)
 	if err != nil {
 		panic(err)
 	}
@@ -120,7 +120,6 @@ func main() {
 	writer.WriteString("AO URI\tResult\tOriginal Barcode\tUpdated Barcode\tOriginal Child Ind 2\tUpdated Child Ind 2\n")
 	writer.Flush()
 
-
 	fmt.Println("6. Updating AO indicators and Top Container URI")
 	//iterate each row in the Array
 	for _, row := range rows {
@@ -132,6 +131,7 @@ func main() {
 			fmt.Println("    Result:", msg)
 		}
 	}
+
 }
 
 func MapTopContainers(tcs []aspace.TopContainer) map[string]aspace.TopContainer {
@@ -163,6 +163,7 @@ func UpdateAO(row Row) (string, error) {
 	var afterCI2 string
 
 	for i, instance := range ao.Instances {
+		fmt.Println(ao.Instances)
 		if undo != true {
 			//update barcode
 			if instance.SubContainer.TopContainer["ref"] == topContainerMap[row.Barcode].URI {
