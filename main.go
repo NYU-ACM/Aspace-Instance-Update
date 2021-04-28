@@ -45,6 +45,17 @@ func init() {
 	flag.Parse()
 }
 
+func help() {
+	fmt.Println(`$ aspace-instance-update [options]
+options:
+  --workorder, required, /path/to/workorder.tsv
+  --environment, required, aspace environment to be used: dev/stage/prod
+  --undo, optional, runs a work order in revrse, undo a previous run
+  --test, optional, test mode does not execute any POSTs, this is recommended before running on any data
+  --help print this help message`)
+	os.Exit(0)
+}
+
 func main() {
 	//check if the help flag is set
 	if helpmsg == true {
@@ -152,11 +163,13 @@ func UpdateAO(row Row) (string, error) {
 
 	repoId, aoID, err := aspace.URISplit(row.URI)
 	if err != nil {
+		WriteToLog(row.URI, "ERROR", "", "", "", "", err.Error())
 		return "", err
 	}
 
 	ao, err := client.GetArchivalObject(repoId, aoID)
 	if err != nil {
+		WriteToLog(row.URI, "ERROR", "", "", "", "", err.Error())
 		return "", err
 	}
 
@@ -199,6 +212,7 @@ func UpdateAO(row Row) (string, error) {
 		}
 	}
 
+	//Output to console
 	fmt.Printf("    Original Barcode: %s, Updated Barcode: %s, Original Child Ind 2: %s, Updated Child Ind 2: %s\n", beforeBarcode, afterBarcode, beforeCI2, afterCI2);
 
 	if test == true {
@@ -211,16 +225,20 @@ func UpdateAO(row Row) (string, error) {
 		msg = strings.ReplaceAll(msg, "\n", "")
 
 		if err != nil {
-			writer.WriteString(fmt.Sprintf("%s\tERROR\t%s\t%s\t%s\t%s\t%s\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2, err.Error()))
-			writer.Flush()
+			WriteToLog(ao.URI, "ERROR", beforeBarcode,afterBarcode, beforeCI2, afterCI2, err.Error())
 			return msg, err
 		}
-		writer.WriteString(fmt.Sprintf("%s\tSUCCESS\t%s\t%s\t%s\t%s\t\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2))
-		writer.Flush()
+		WriteToLog(ao.URI, "SUCCESS", beforeBarcode,afterBarcode, beforeCI2, afterCI2, "")
 		return msg, nil
 	}
 
 }
+
+func WriteToLog(aourl string, status string, beforeBarcode string,afterBarcode string, beforeCI2 string, afterCI2 string, errormsg string) {
+	writer.WriteString(fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n", aourl,status,beforeBarcode,afterBarcode, beforeCI2, afterCI2,errormsg))
+	writer.Flush()
+}
+
 
 func GetTSVRows(tsv *os.File) ([]Row, error) {
 	//create an empty array or Rows
@@ -243,17 +261,6 @@ func GetTSVRows(tsv *os.File) ([]Row, error) {
 
 	//return the array of Rows
 	return rows, nil
-}
-
-func help() {
-	fmt.Println(`$ aspace-instance-update [options]
-options:
-  --workorder, required, /path/to/workorder.tsv
-  --environment, required, aspace environment to be used: dev/stage/prod
-  --undo, optional, runs a work order in revrse, undo a previous run
-  --test, optional, test mode does not execute any POSTs, this is recommended before running on any data
-  --help print this help message`)
-	os.Exit(0)
 }
 
 func GetInstanceAsJson(instances []aspace.Instance) string {
