@@ -51,13 +51,12 @@ func main() {
 		help()
 	}
 
-	fmt.Println("aspace-instance-update")
+	fmt.Println("aspace-instance-update v1.0.2b\n")
 
 	//check if the work order exists or is null
 	if wo == "" {
-		fmt.Printf("No work order specified, exiting")
+		fmt.Printf("No work order file specified, exiting")
 		help()
-
 	}
 
 	if _, err := os.Stat(wo); os.IsNotExist(err) {
@@ -110,27 +109,31 @@ func main() {
 	//create a map of top containers indexed by barcode
 	topContainerMap = MapTopContainers(topContainers)
 
-	fmt.Println("5. Creating Logfile")
-	logFile, err := os.Create("aspace-instance-update-log.tsv")
+	logName := "AIU-" + tsv.Name()
+	fmt.Println("5. Creating Logfile", logName)
+	logFile, err := os.Create(logName)
 	if err != nil {
 		panic(err)
 	}
 	defer logFile.Close()
 	writer = bufio.NewWriter(logFile)
-	writer.WriteString("AO URI\tResult\tOriginal Barcode\tUpdated Barcode\tOriginal Child Ind 2\tUpdated Child Ind 2\n")
+	writer.WriteString("AO URI\tResult\tOriginal Barcode\tUpdated Barcode\tOriginal Child Ind 2\tUpdated Child Ind 2\tError Msg\n")
 	writer.Flush()
 
 	fmt.Println("6. Updating AO indicators and Top Container URI")
 	//iterate each row in the Array
+
 	for _, row := range rows {
 		if (row.Barcode != row.NewBarcode || row.ContainerIndicator2 != row.NewContainerIndicator2) {
 			msg, err := UpdateAO(row)
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("    Result:", msg)
+			fmt.Println("    Result:", msg, "\n")
 		}
 	}
+
+	fmt.Println("Done, exiting.");
 
 }
 
@@ -145,7 +148,7 @@ func MapTopContainers(tcs []aspace.TopContainer) map[string]aspace.TopContainer 
 }
 
 func UpdateAO(row Row) (string, error) {
-	fmt.Println("  Updating:", row.URI)
+	fmt.Println("Updating:", row.URI)
 
 	repoId, aoID, err := aspace.URISplit(row.URI)
 	if err != nil {
@@ -163,7 +166,7 @@ func UpdateAO(row Row) (string, error) {
 	var afterCI2 string
 
 	for i, instance := range ao.Instances {
-		fmt.Println(ao.Instances)
+
 		if undo != true {
 			//update barcode
 			if instance.SubContainer.TopContainer["ref"] == topContainerMap[row.Barcode].URI {
@@ -196,10 +199,11 @@ func UpdateAO(row Row) (string, error) {
 		}
 	}
 
-	//after := GeInstanceAsJson(ao.Instances)
-	//fmt.Println("    After: ", ao.Instances)
+	fmt.Printf("    Original Barcode: %s, Updated Barcode: %s, Original Child Ind 2: %s, Updated Child Ind 2: %s\n", beforeBarcode, afterBarcode, beforeCI2, afterCI2);
 
 	if test == true {
+		writer.WriteString(fmt.Sprintf("%s\tSUCCESS\t%s\t%s\t%s\t%s\t\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2))
+		writer.Flush()
 		return "Test Mode - not Updating AO", nil
 	} else {
 		//update the ao
@@ -207,11 +211,11 @@ func UpdateAO(row Row) (string, error) {
 		msg = strings.ReplaceAll(msg, "\n", "")
 
 		if err != nil {
-			writer.WriteString(fmt.Sprintf("%s\tERROR\t%s\t%s\t%s\t%s\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2))
+			writer.WriteString(fmt.Sprintf("%s\tERROR\t%s\t%s\t%s\t%s\t%s\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2, err.Error()))
 			writer.Flush()
 			return msg, err
 		}
-		writer.WriteString(fmt.Sprintf("%s\tSUCCESS\t%s\t%s\t%s\t%s\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2))
+		writer.WriteString(fmt.Sprintf("%s\tSUCCESS\t%s\t%s\t%s\t%s\t\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2))
 		writer.Flush()
 		return msg, nil
 	}
