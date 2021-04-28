@@ -133,7 +133,7 @@ func main() {
 		}
 	}
 
-	fmt.Println("Upate Complete, exiting.");
+	fmt.Println("Update Complete, exiting.");
 
 }
 
