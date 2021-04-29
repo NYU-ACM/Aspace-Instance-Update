@@ -11,32 +11,35 @@ import (
 )
 
 type Row struct {
-	Resource               	string
-	RefID                  	string
-	URI                    	string
-	ContainerIndicator1    	string
-	ContainerIndicator2    	string
-	ContainerIndicator3    	string
-	Title                  	string
-	ComponentId            	string
-	Barcode				   	string
-	NewContainerIndicator2	string
-	NewBarcode 				string
+	Resource               string
+	RefID                  string
+	URI                    string
+	ContainerIndicator1    string
+	ContainerIndicator2    string
+	ContainerIndicator3    string
+	Title                  string
+	ComponentId            string
+	Barcode                string
+	NewContainerIndicator2 string
+	NewBarcode             string
 }
 
 var (
-	client *aspace.ASClient
-	topContainers []aspace.TopContainer
+	versionNum      = "v1.0.3b"
+	client          *aspace.ASClient
+	topContainers   []aspace.TopContainer
 	topContainerMap map[string]aspace.TopContainer
-	wo string
-	test bool
-	undo bool
-	env string
-	helpmsg bool
-	writer *bufio.Writer
+	wo              string
+	test            bool
+	undo            bool
+	env             string
+	helpmsg         bool
+	version         bool
+	writer          *bufio.Writer
 )
 
 func init() {
+	flag.BoolVar(&version, "version", false, "display the version")
 	flag.StringVar(&env, "environment", "", "environment to run script")
 	flag.StringVar(&wo, "workorder", "", "work order location")
 	flag.BoolVar(&test, "test", false, "run in test mode")
@@ -46,23 +49,32 @@ func init() {
 }
 
 func help() {
-	fmt.Println(`$ aspace-instance-update [options]
+	fmt.Println(`usage:
+  $ aspace-instance-update [options]
 options:
   --workorder, required, /path/to/workorder.tsv
   --environment, required, aspace environment to be used: dev/stage/prod
   --undo, optional, runs a work order in revrse, undo a previous run
   --test, optional, test mode does not execute any POSTs, this is recommended before running on any data
-  --help print this help message`)
-	os.Exit(0)
+  --help print this help message
+  --version print the version info`)
+
 }
 
 func main() {
+
 	//check if the help flag is set
 	if helpmsg == true {
 		help()
+		os.Exit(0)
 	}
 
-	fmt.Println("aspace-instance-update v1.0.2b\n")
+	if version == true {
+		fmt.Println("aspace-instance-update", versionNum)
+		os.Exit(0)
+	}
+
+	fmt.Println("aspace-instance-update", versionNum)
 
 	//check if the work order exists or is null
 	if wo == "" {
@@ -98,7 +110,7 @@ func main() {
 
 	fmt.Println("3. Getting repository and resource IDs")
 	//get the repository ID from the first row of the TSV
-	repositoryId,aoID, err := aspace.URISplit(rows[1].URI)
+	repositoryId, aoID, err := aspace.URISplit(rows[1].URI)
 	if err != nil {
 		panic(err)
 	}
@@ -135,7 +147,7 @@ func main() {
 	//iterate each row in the Array
 
 	for _, row := range rows {
-		if (row.Barcode != row.NewBarcode || row.ContainerIndicator2 != row.NewContainerIndicator2) {
+		if row.Barcode != row.NewBarcode || row.ContainerIndicator2 != row.NewContainerIndicator2 {
 			msg, err := UpdateAO(row)
 			if err != nil {
 				panic(err)
@@ -144,14 +156,14 @@ func main() {
 		}
 	}
 
-	fmt.Println("Update Complete, exiting.");
+	fmt.Println("Update Complete, exiting.")
 
 }
 
 func MapTopContainers(tcs []aspace.TopContainer) map[string]aspace.TopContainer {
 	tcMap := map[string]aspace.TopContainer{}
 	for _, tc := range tcs {
-		if(tc.Barcode != "") {
+		if tc.Barcode != "" {
 			tcMap[tc.Barcode] = tc
 		}
 	}
@@ -213,10 +225,10 @@ func UpdateAO(row Row) (string, error) {
 	}
 
 	//Output to console
-	fmt.Printf("    Original Barcode: %s, Updated Barcode: %s, Original Child Ind 2: %s, Updated Child Ind 2: %s\n", beforeBarcode, afterBarcode, beforeCI2, afterCI2);
+	fmt.Printf("    Original Barcode: %s, Updated Barcode: %s, Original Child Ind 2: %s, Updated Child Ind 2: %s\n", beforeBarcode, afterBarcode, beforeCI2, afterCI2)
 
 	if test == true {
-		writer.WriteString(fmt.Sprintf("%s\tSUCCESS\t%s\t%s\t%s\t%s\t\n", ao.URI,beforeBarcode,afterBarcode, beforeCI2, afterCI2))
+		writer.WriteString(fmt.Sprintf("%s\tSUCCESS\t%s\t%s\t%s\t%s\t\n", ao.URI, beforeBarcode, afterBarcode, beforeCI2, afterCI2))
 		writer.Flush()
 		return "Test Mode - not Updating AO", nil
 	} else {
@@ -225,20 +237,19 @@ func UpdateAO(row Row) (string, error) {
 		msg = strings.ReplaceAll(msg, "\n", "")
 
 		if err != nil {
-			WriteToLog(ao.URI, "ERROR", beforeBarcode,afterBarcode, beforeCI2, afterCI2, err.Error())
+			WriteToLog(ao.URI, "ERROR", beforeBarcode, afterBarcode, beforeCI2, afterCI2, err.Error())
 			return msg, err
 		}
-		WriteToLog(ao.URI, "SUCCESS", beforeBarcode,afterBarcode, beforeCI2, afterCI2, "")
+		WriteToLog(ao.URI, "SUCCESS", beforeBarcode, afterBarcode, beforeCI2, afterCI2, "")
 		return msg, nil
 	}
 
 }
 
-func WriteToLog(aourl string, status string, beforeBarcode string,afterBarcode string, beforeCI2 string, afterCI2 string, errormsg string) {
-	writer.WriteString(fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n", aourl,status,beforeBarcode,afterBarcode, beforeCI2, afterCI2,errormsg))
+func WriteToLog(aourl string, status string, beforeBarcode string, afterBarcode string, beforeCI2 string, afterCI2 string, errormsg string) {
+	writer.WriteString(fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n", aourl, status, beforeBarcode, afterBarcode, beforeCI2, afterCI2, errormsg))
 	writer.Flush()
 }
-
 
 func GetTSVRows(tsv *os.File) ([]Row, error) {
 	//create an empty array or Rows
