@@ -25,7 +25,7 @@ type Row struct {
 }
 
 var (
-	versionNum      = "v1.0.3b"
+	versionNum      = "v1.0.4b"
 	client          *aspace.ASClient
 	topContainers   []aspace.TopContainer
 	topContainerMap map[string]aspace.TopContainer
@@ -87,18 +87,32 @@ func main() {
 	}
 
 	//open a work order and check for errors
-	fmt.Println("1. Parsing work order")
+	fmt.Println("1. Opening work work order")
 	tsv, err := os.Open(wo)
 	if err != nil {
 		panic(err)
 	}
+
+	//create a logger
+	logName := "AIU-" + tsv.Name()
+	fmt.Println("2. Creating Logfile", logName)
+	logFile, err := os.Create(logName)
+	if err != nil {
+		panic(err)
+	}
+	defer logFile.Close()
+	writer = bufio.NewWriter(logFile)
+	writer.WriteString("AO URI\tResult\tOriginal Barcode\tUpdated Barcode\tOriginal Child Ind 2\tUpdated Child Ind 2\tError Msg\n")
+	writer.Flush()
+
+	fmt.Println("3. Parsing Work Order")
 	//get the rows of the tsv file as an array
 	rows, err := GetTSVRows(tsv)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("2. Getting Aspace client")
+	fmt.Println("4. Getting Aspace client")
 	//get a go-aspace client
 	if env == "" {
 		panic(fmt.Errorf("Environment must be defined"))
@@ -108,7 +122,7 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("3. Getting repository and resource IDs")
+	fmt.Println("5. Getting repository and resource IDs")
 	//get the repository ID from the first row of the TSV
 	repositoryId, aoID, err := aspace.URISplit(rows[1].URI)
 	if err != nil {
@@ -123,7 +137,7 @@ func main() {
 	_, resourceId, err := aspace.URISplit(ao.Resource["ref"])
 
 	//Get a list of Top Containers from aspace  for the resource
-	fmt.Println("4. Getting Top Containers for resource")
+	fmt.Println("6. Getting Top Containers for resource")
 
 	topContainers, err = client.GetTopContainersForResource(repositoryId, resourceId)
 	if err != nil {
@@ -132,18 +146,10 @@ func main() {
 	//create a map of top containers indexed by barcode
 	topContainerMap = MapTopContainers(topContainers)
 
-	logName := "AIU-" + tsv.Name()
-	fmt.Println("5. Creating Logfile", logName)
-	logFile, err := os.Create(logName)
-	if err != nil {
-		panic(err)
-	}
-	defer logFile.Close()
-	writer = bufio.NewWriter(logFile)
-	writer.WriteString("AO URI\tResult\tOriginal Barcode\tUpdated Barcode\tOriginal Child Ind 2\tUpdated Child Ind 2\tError Msg\n")
-	writer.Flush()
 
-	fmt.Println("6. Updating AO indicators and Top Container URI")
+
+
+	fmt.Println("7. Updating AO indicators and Top Container URI")
 	//iterate each row in the Array
 
 	for _, row := range rows {
@@ -176,13 +182,13 @@ func UpdateAO(row Row) (string, error) {
 	repoId, aoID, err := aspace.URISplit(row.URI)
 	if err != nil {
 		WriteToLog(row.URI, "ERROR", "", "", "", "", err.Error())
-		return "", err
+		return "Could not parse URI " + row.URI + " , Skipping", nil
 	}
 
 	ao, err := client.GetArchivalObject(repoId, aoID)
 	if err != nil {
 		WriteToLog(row.URI, "ERROR", "", "", "", "", err.Error())
-		return "", err
+		return "ArchivesSpace return a 404 for " + row.URI, nil
 	}
 
 	var beforeBarcode string
@@ -238,7 +244,7 @@ func UpdateAO(row Row) (string, error) {
 
 		if err != nil {
 			WriteToLog(ao.URI, "ERROR", beforeBarcode, afterBarcode, beforeCI2, afterCI2, err.Error())
-			return msg, err
+			return msg, nil
 		}
 		WriteToLog(ao.URI, "SUCCESS", beforeBarcode, afterBarcode, beforeCI2, afterCI2, "")
 		return msg, nil
@@ -259,11 +265,19 @@ func GetTSVRows(tsv *os.File) ([]Row, error) {
 	// skip the header line
 	scanner.Scan()
 	// scan the tsv file line by line
+	currentRow := 1;
 	for scanner.Scan() {
 		//split the line by tab chars
 		cols := strings.Split(scanner.Text(), "\t")
 		//marshal the split line into a Row struct and add to the array of Rows
-		rows = append(rows, Row{cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9], cols[10]})
+		row, err := tryParse(cols)
+		if err != nil {
+			fmt.Printf("\t%v line %d [%s]\n", err.Error(), currentRow, scanner.Text())
+			fmt.Printf("\tA row should have 12 columns, had %d columns, skipping.\n", len(cols))
+			WriteToLog(cols[2],"SKIPPED", "", "", "", "", err.Error())
+		}
+		rows = append(rows, row)
+		currentRow = currentRow + 1;
 	}
 	//Check for any read errors
 	if scanner.Err() != nil {
@@ -272,6 +286,14 @@ func GetTSVRows(tsv *os.File) ([]Row, error) {
 
 	//return the array of Rows
 	return rows, nil
+}
+
+func tryParse(cols []string) (Row, error) {
+	if(len(cols) != 11) {
+		return Row{}, fmt.Errorf("Malformed Line Errror")
+	} else {
+		return Row{cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9], cols[10]}, nil
+	}
 }
 
 func GetInstanceAsJson(instances []aspace.Instance) string {
